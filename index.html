@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Calculadora de sumas con historial seguro en base de datos JSON." />
+  <meta name="theme-color" content="#101a2b" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/styles.css" />
+  <title>Sumario · Calculadora</title>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="header"><div class="brand"><span class="logo" aria-hidden="true">∑</span><span>sumario<span class="brand-dot">.</span></span></div><span class="tag">Python · Docker · Azure Cosmos DB</span></header>
+  <main class="main">
+    <div class="lead"><p class="eyebrow">CALCULADORA CON REGISTRO</p><h1>Dos números.<br><span>Una suma.</span></h1><p class="subtitle">Calcula, guarda el resultado y registra la operación en una base de datos de documentos JSON.</p></div>
+    <section class="card" aria-labelledby="title-card">
+      <div class="card-top"><div><p class="overline">OPERACIÓN</p><h2 id="title-card">Realizar una suma</h2></div><span class="pill" id="status"><span class="status-dot"></span>Lista para calcular</span></div>
+      <form id="sum-form" novalidate>
+        <div class="inputs"><div class="field"><label for="number-a">Primera celdilla</label><input id="number-a" type="number" step="any" min="-1000000000000" max="1000000000000" placeholder="Ej. 12.5" required inputmode="decimal" autocomplete="off" /></div><div class="plus" aria-hidden="true">+</div><div class="field"><label for="number-b">Segunda celdilla</label><input id="number-b" type="number" step="any" min="-1000000000000" max="1000000000000" placeholder="Ej. 7.5" required inputmode="decimal" autocomplete="off" /></div></div>
+        <div class="disclosure"><input id="consent" type="checkbox" required /><label for="consent">Entiendo que al calcular se registrarán mis dos valores, el resultado, la fecha y hora UTC y mi dirección IP en la base de datos.</label></div>
+        <button class="primary" type="submit" id="calculate">Calcular y guardar <span aria-hidden="true">→</span></button>
+      </form>
+      <div class="result" id="result" aria-live="polite" hidden><p class="overline">RESULTADO GUARDADO</p><strong id="result-value">0</strong><p id="saved-at">Registro guardado</p></div>
+      <div class="notice" id="message" role="alert" hidden></div>
+    </section>
+    <div class="footnotes"><div><span class="mini-icon">↗</span><div><strong>Resultado persistente</strong><p>La operación se guarda antes de confirmar el cálculo.</p></div></div><div><span class="mini-icon">◈</span><div><strong>Datos privados</strong><p>Los registros no se publican en la página; el administrador los consulta en Azure.</p></div></div></div>
+  </main>
+  <footer>Proyecto demostrativo · Registros de IP: informa a los visitantes y establece una política de conservación.</footer>
+</body>
+</html>
