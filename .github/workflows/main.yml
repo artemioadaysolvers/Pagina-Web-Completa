@@ -1,0 +1,76 @@
+
+name: Actualizar calculadora Docker en Azure
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: despliegue-calculadora
+  cancel-in-progress: false
+
+env:
+  ACR_NAME: registrocalculadora20265
+  IMAGE_URI: registrocalculadora20265-d0g4gybvcdf0gddk.azurecr.io/calculadora-registros:${{ github.sha }}
+  RESOURCE_GROUP: rg-pagina-web-completa5
+  WEBAPP_NAME: paginacalculadora-registros
+  CONTAINER_NAME: maincalculadora-registros
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Construir imagen Docker
+        run: docker build --pull -t "$IMAGE_URI" .
+
+      - name: Verificar Python 3.14.8
+        run: |
+          docker run --rm \
+            --entrypoint python \
+            "$IMAGE_URI" --version
+
+      - name: Ejecutar pruebas
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/tests:ro" \
+            -w /tests \
+            --entrypoint python \
+            "$IMAGE_URI" \
+            -m unittest discover -s tests -v
+
+      - name: Iniciar sesion en Microsoft Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Iniciar sesion en Container Registry
+        run: az acr login --name "$ACR_NAME"
+
+      - name: Publicar imagen Docker
+        run: docker push "$IMAGE_URI"
+
+      - name: Actualizar contenedor de App Service
+        run: |
+          az webapp sitecontainers update \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$WEBAPP_NAME" \
+            --container-name "$CONTAINER_NAME" \
+            --image "$IMAGE_URI"
+
+      - name: Reiniciar pagina web
+        run: |
+          az webapp restart \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$WEBAPP_NAME"
