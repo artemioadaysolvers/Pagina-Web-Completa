@@ -95,25 +95,65 @@ def create_store():
     raise ValueError("DB_BACKEND debe ser 'sqlite' o 'cosmos'")
 
 
-def first_valid_ip(value: str) -> str | None:
-    """Extrae primera IP válida de X-Forwarded-For (cabecera no autenticada)."""
-    for candidate in value.split(",")[:10]:
-        candidate = candidate.strip().strip('"')
+def parse_forwarded_ip(value: str):
+    """Acepta IP, IPv4:puerto y [IPv6]:puerto de X-Forwarded-For."""
+    address = value.strip().strip('"').strip()
+    try:
+        return ipaddress.ip_address(address)
+    except ValueError:
+        pass
+
+    if address.startswith("[") and "]" in address:
+        host, suffix = address[1:].split("]", 1)
+        if not suffix or (suffix.startswith(":") and suffix[1:].isascii()
+                          and suffix[1:].isdigit() and 0 <= int(suffix[1:]) <= 65535):
+            try:
+                return ipaddress.IPv6Address(host)
+            except ValueError:
+                return None
+        return None
+
+    host, separator, port = address.rpartition(":")
+    if separator and port.isascii() and port.isdigit() and 0 <= int(port) <= 65535:
         try:
-            return str(ipaddress.ip_address(candidate))
+            return ipaddress.IPv4Address(host)
         except ValueError:
             pass
     return None
 
 
+def first_valid_ip(value: str) -> str | None:
+    """Obtiene la IP pública más próxima al proxy en X-Forwarded-For.
+
+    Se inspecciona de derecha a izquierda para no privilegiar prefijos
+    posiblemente inyectados por el cliente. No se usan IP internas.
+    No debe considerarse prueba de identidad del visitante.
+    """
+    for candidate in reversed(value.split(",")[-10:]):
+        ip = parse_forwarded_ip(candidate)
+        if ip is not None and ip.is_global:
+            return str(ip)
+    return None
+
+
 def client_ip(handler: BaseHTTPRequestHandler) -> str:
-    ip = handler.client_address[0]
-    # Activar únicamente detrás de un proxy controlado (p. ej., Azure App Service).
-    # Este valor sigue siendo declarativo y no prueba la identidad del visitante.
-    if os.getenv("TRUST_PROXY_HEADERS") == "1":
-        forwarded = handler.headers.get("X-Forwarded-For", "")
-        return first_valid_ip(forwarded) or ip
-    return ip
+    peer = handler.client_address[0]
+    if os.getenv("TRUST_PROXY_HEADERS") != "1":
+        return peer
+
+    # En Azure App Service, el contenedor recibe conexiones del proxy
+    # interno 169.254.0.0/16. No confiar en cabeceras de clientes directos.
+    try:
+        is_azure_internal_proxy = ipaddress.ip_address(peer).is_link_local
+    except ValueError:
+        return "no disponible"
+    if not is_azure_internal_proxy:
+        return peer
+
+    # Azure puede enviar IP:puerto. Nunca guardar la IP del proxy
+    # como si fuera la del visitante cuando falta una IP pública.
+    forwarded_values = handler.headers.get_all("X-Forwarded-For", [])
+    return first_valid_ip(",".join(forwarded_values)) or "no disponible"
 
 
 def validate_numbers(data) -> tuple[Decimal, Decimal]:

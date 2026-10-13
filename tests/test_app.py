@@ -1,5 +1,8 @@
 """Pruebas del servidor y persistencia local, ejecutables dentro del contenedor."""
 import json
+from email.message import Message
+from types import SimpleNamespace
+from unittest.mock import patch
 import sqlite3
 import tempfile
 import threading
@@ -108,8 +111,28 @@ class ServerTests(unittest.TestCase):
                 self.assertEqual(self.fetch(path)[0], 404)
 
     def test_forwarded_ip(self):
-        self.assertEqual(first_valid_ip("192.0.2.15, 10.2.3.4"), "192.0.2.15")
+        self.assertEqual(first_valid_ip("8.8.8.8, 10.2.3.4"), "8.8.8.8")
+        self.assertEqual(first_valid_ip("181.42.123.45:52731, 10.64.8.4"), "181.42.123.45")
+        self.assertEqual(first_valid_ip("[2606:4700:4700::1111]:443, 169.254.129.1"),
+                         "2606:4700:4700::1111")
+        self.assertEqual(first_valid_ip("8.8.8.8, 1.1.1.1:42000, 10.2.3.4"), "1.1.1.1")
+        self.assertIsNone(first_valid_ip("169.254.129.1, 10.2.3.4"))
         self.assertIsNone(first_valid_ip("bad, 999.999.0.1"))
+        self.assertIsNone(first_valid_ip("8.8.8.8:bad"))
+
+    def test_azure_client_ip_from_forwarded_header(self):
+        headers = Message()
+        headers.add_header("X-Forwarded-For", "8.8.8.8, 181.42.123.45:52731, 10.64.8.4")
+        request = SimpleNamespace(client_address=("169.254.129.1", 1234), headers=headers)
+        with patch.dict("os.environ", {"TRUST_PROXY_HEADERS": "1"}):
+            self.assertEqual(client_ip(request), "181.42.123.45")
+            missing = SimpleNamespace(client_address=("169.254.129.1", 1234),
+                                      headers=Message())
+            self.assertEqual(client_ip(missing), "no disponible")
+            direct = SimpleNamespace(client_address=("127.0.0.1", 1234), headers=headers)
+            self.assertEqual(client_ip(direct), "127.0.0.1")
+        with patch.dict("os.environ", {"TRUST_PROXY_HEADERS": "0"}):
+            self.assertEqual(client_ip(request), "169.254.129.1")
 
     def test_decimal(self):
         self.assertEqual(sum(validate_numbers({"a": Decimal("0.1"), "b": Decimal("0.2")})), Decimal("0.3"))
